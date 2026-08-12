@@ -23,7 +23,7 @@ export default function Home() {
 {`{
   "mcpServers": {
     "korea-bills": {
-      "url": "https://<이 사이트 도메인>/api/mcp"
+      "url": "https://korea-bills-mcp.vercel.app/api/mcp"
     }
   }
 }`}

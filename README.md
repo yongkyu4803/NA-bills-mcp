@@ -28,7 +28,7 @@ MCP 클라이언트 설정에 추가합니다.
 {
   "mcpServers": {
     "korea-bills": {
-      "url": "https://<배포 도메인>/api/mcp"
+      "url": "https://korea-bills-mcp.vercel.app/api/mcp"
     }
   }
 }
@@ -37,7 +37,7 @@ MCP 클라이언트 설정에 추가합니다.
 Claude Code에서는 다음과 같이 등록할 수도 있습니다.
 
 ```bash
-claude mcp add --transport http korea-bills https://<배포 도메인>/api/mcp
+claude mcp add --transport http korea-bills https://korea-bills-mcp.vercel.app/api/mcp
 ```
 
 ## 배포 (Vercel)

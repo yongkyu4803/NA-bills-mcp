@@ -1,0 +1,47 @@
+<evaluation>
+  <!--
+    korea-bills-mcp-server 평가셋.
+    모든 질문은 읽기 전용 도구만으로 답할 수 있으며, 답은 2026-08-12 기준 DB 로 검증했다.
+    법안 데이터가 계속 쌓이므로 질문은 대부분 과거 기간으로 한정해 답이 흔들리지 않게 했다.
+  -->
+  <qa_pair>
+    <question>전세사기 피해자 지원 특별법의 유효기간을 2029년 5월까지 4년 연장하려는 개정안이 2025년 3월에 발의됐다. 이 법안의 의안번호는 무엇인가?</question>
+    <answer>2208830</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>의안번호 2208830 법안을 대표발의한 국회의원의 이름은?</question>
+    <answer>박용갑</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>국회 법안을 주제별로 묶은 법안군 중 소속 법안이 가장 많은 것의 주제는 무엇이며, 몇 건이 묶여 있는가? "주제 / 건수" 형식으로 답하라.</question>
+    <answer>특별검사법 / 59</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>2025년 한 해(2025-01-01~2025-12-31) 동안 발의된 법안 중 환경(environmental) 분야로 분류된 것은 몇 건인가?</question>
+    <answer>47</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>문화(cultural) 분야이면서 규제 성격이 "완화"로 분류된 법안은 모두 몇 건인가?</question>
+    <answer>14</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>아파트 관리사무소장과 경비원에게 폭행·협박하거나 부당하게 지시한 입주자에게 최대 1천만원 과태료를 부과하려는 공동주택관리법 개정안이 2026년 1월에 발의됐다. 이 법안의 규제 성격 분류는 무엇인가?</question>
+    <answer>신설</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>박용갑 의원이 대표발의한 법안은 모두 몇 건인가?</question>
+    <answer>77</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>조국혁신당 소속 의원이 대표발의한 법안 중 실제 법안 레코드가 존재하는 것은 몇 건인가?</question>
+    <answer>605</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>2026년 8월 11일자 일일 법안 동향 리포트에 따르면 그날 발의된 법안은 총 몇 건인가?</question>
+    <answer>13</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>소속 법안이 20건 이상인 법안군(주제 클러스터)은 모두 몇 개인가?</question>
+    <answer>3</answer>
+  </qa_pair>
+</evaluation>

@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { DATA_COVERAGE } from '@/constants';
+import { DATA_COVERAGE, SCOPE_NOTICE } from '@/constants';
 import { getDb, BILL_LIST_COLUMNS } from '@/services/supabase';
 import {
   ResponseFormat,
   buildPagination,
   renderWithLimit,
   runTool,
+  scopedJson,
+  scopedResult,
   textResult,
 } from '@/services/format';
 import {
@@ -19,6 +21,7 @@ import {
   stripInternalIds,
   type BillRow,
 } from '@/services/bills';
+import { attachStatusSummaries } from '@/services/status';
 
 const InputSchema = z
   .object({
@@ -53,6 +56,10 @@ export function registerFilter(server: McpServer): void {
 
 의미 유추 없이 지정한 조건에 정확히 맞는 법안을 발의일 순으로 반환한다. 페이지네이션을 지원한다.
 읽기 전용이며 데이터를 변경하지 않는다.
+
+${SCOPE_NOTICE}
+각 법안에 처리 상태 요약(status_summary)이 함께 붙는다. 다만 **상태로 거르는 필터 인자는 아직 없다** —
+"계류 중인 환경 법안"처럼 상태로 좁히려면 결과를 받아 status_summary 로 직접 걸러야 한다.
 
 언제 쓰나:
   - "이번 달 정무위원회에 올라온 법안" → committee="정무위원회", date_from="2026-08-01"
@@ -122,20 +129,16 @@ export function registerFilter(server: McpServer): void {
           );
         }
 
+        await attachStatusSummaries(bills);
+
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              {
-                ...buildPagination(total, bills.length, params.offset),
-                bills: stripInternalIds(bills),
-              },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            ...buildPagination(total, bills.length, params.offset),
+            bills: stripInternalIds(bills),
+          });
         }
 
-        return textResult(
+        return scopedResult(
           renderWithLimit(bills, (subset, note) =>
             renderBillList('법안 조건 검색 결과', subset, {
               total,

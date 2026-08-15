@@ -2,7 +2,14 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getDb } from '@/services/supabase';
-import { ResponseFormat, runTool, textResult } from '@/services/format';
+import {
+  ResponseFormat,
+  runTool,
+  scopedJson,
+  scopedResult,
+  textResult,
+} from '@/services/format';
+import { SCOPE_NOTICE, STATUS_UNSUPPORTED_NOTE } from '@/constants';
 import { applyFilters, commonFilters, describeFilters } from '@/services/bills';
 
 /** 집계를 위해 스캔하는 최대 행 수 */
@@ -76,6 +83,12 @@ export function registerStatistics(server: McpServer): void {
 개별 법안을 나열하는 대신 "어디에 얼마나 몰려 있는가"를 파악할 때 쓴다. 필터를 걸면 그 부분집합만 집계한다.
 읽기 전용이며 데이터를 변경하지 않는다.
 
+${SCOPE_NOTICE}
+
+${STATUS_UNSUPPORTED_NOTE}
+집계 단위는 전부 **발의 건수**다. "올해 몇 건 통과됐어?" 처럼 처리 결과를 집계하는 축은 아직
+없으므로, 이 도구의 수치를 가결 건수로 소개하면 안 된다.
+
 언제 쓰나:
   - "올해 어느 상임위에 법안이 가장 많이 갔어?" → group_by="committee", date_from="2026-01-01"
   - "규제 강화 vs 완화 비율" → group_by="regulation_type"
@@ -147,20 +160,14 @@ export function registerStatistics(server: McpServer): void {
         }));
 
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              {
-                group_by: params.group_by,
-                filters: describeFilters(params),
-                total_bills: scanned,
-                groups,
-                truncated,
-                ...(capped ? { scan_capped_at: SCAN_CAP } : {}),
-              },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            group_by: params.group_by,
+            filters: describeFilters(params),
+            total_bills: scanned,
+            groups,
+            truncated,
+            ...(capped ? { scan_capped_at: SCAN_CAP } : {}),
+          });
         }
 
         const labels: Record<Input['group_by'], string> = {
@@ -191,7 +198,7 @@ export function registerStatistics(server: McpServer): void {
           );
         }
 
-        return textResult(lines.join('\n'));
+        return scopedResult(lines.join('\n'));
       })
   );
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { DATA_COVERAGE, MAX_LIMIT } from '@/constants';
+import { DATA_COVERAGE, MAX_LIMIT, SCOPE_NOTICE } from '@/constants';
 import { BILL_LIST_COLUMNS, fetchBillsByIds, getDb } from '@/services/supabase';
 import { embedQuery, isSemanticSearchAvailable } from '@/services/embeddings';
 import {
@@ -9,6 +9,8 @@ import {
   errorResult,
   renderWithLimit,
   runTool,
+  scopedJson,
+  scopedResult,
   textResult,
 } from '@/services/format';
 import {
@@ -19,6 +21,7 @@ import {
   stripInternalIds,
   type BillRow,
 } from '@/services/bills';
+import { attachStatusSummaries } from '@/services/status';
 
 const InputSchema = z
   .object({
@@ -63,6 +66,8 @@ export function registerSearch(server: McpServer): void {
 법안명에 검색어가 그대로 없어도 내용이 유사하면 찾아낸다. 각 법안에는 사람이 읽기 쉬운 한 줄 요약이 붙어 있다.
 읽기 전용이며 데이터를 변경하지 않는다.
 
+${SCOPE_NOTICE}
+
 언제 쓰나:
   - "전세 사기 관련 법안 있어?" → query="전세 사기 피해자 보호"
   - "작년 하반기 플랫폼 노동 규제 강화 법안" → query="플랫폼 노동자 보호", date_from="2025-07-01", regulation_type="강화"
@@ -87,7 +92,8 @@ export function registerSearch(server: McpServer): void {
       "regulation_type": string | null,
       "summary_one_sentence": string,
       "link_url": string,
-      "similarity": number            // 0-1 코사인 유사도
+      "similarity": number,           // 0-1 코사인 유사도
+      "status_summary": string        // 예: "계류 · 소관위심사", "처리 · 공포 (2026-08-05 공포)"
     }
   ],
   "has_more": boolean
@@ -163,21 +169,17 @@ export function registerSearch(server: McpServer): void {
           );
         }
 
+        await attachStatusSummaries(page);
+
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              {
-                query: params.query,
-                ...buildPagination(total, page.length, 0),
-                bills: stripInternalIds(page),
-              },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            query: params.query,
+            ...buildPagination(total, page.length, 0),
+            bills: stripInternalIds(page),
+          });
         }
 
-        return textResult(
+        return scopedResult(
           renderWithLimit(page, (subset, note) =>
             renderBillList(`법안 검색: "${params.query}"`, subset, {
               total,

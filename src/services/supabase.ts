@@ -28,9 +28,14 @@ export function getDb(): SupabaseClient {
   return cached;
 }
 
-/** 법안 목록 조회 시 공통으로 가져오는 컬럼 (임베딩 벡터는 제외해 응답 용량을 줄인다) */
+/**
+ * 법안 목록 조회 시 공통으로 가져오는 컬럼 (임베딩 벡터는 제외해 응답 용량을 줄인다).
+ *
+ * bill_id 는 응답에 싣지 않지만, 처리 상태 조인에서 의안번호가 재발급된 건을 구제하는
+ * 폴백 키로 필요하다(services/status.ts 참조). stripInternalIds() 가 렌더 직전에 제거한다.
+ */
 export const BILL_LIST_COLUMNS =
-  'id, bill_no, bill_name, proposer, proposal_date, committee, domain, ' +
+  'id, bill_id, bill_no, bill_name, proposer, proposal_date, committee, domain, ' +
   'regulation_type, summary_one_sentence, link_url';
 
 /**

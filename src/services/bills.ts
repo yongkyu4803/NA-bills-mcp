@@ -89,16 +89,21 @@ export function describeFilters(f: BillFilters): string {
 }
 
 /**
- * 응답에서 내부 식별자(UUID)를 제거한다.
+ * 응답에서 내부 식별자를 제거한다.
  * 외부에 노출하는 법안 식별자는 의안번호(bill_no) 하나로 통일해
  * 에이전트 컨텍스트를 아끼고 도구 간 입력값을 일관되게 유지한다.
+ *
+ * bill_id 는 상태 조인 폴백에만 쓰는 내부 키라 여기서 함께 떨어뜨린다.
  */
-export function stripInternalIds<T extends { id?: unknown }>(rows: T[]): Array<Omit<T, 'id'>> {
-  return rows.map(({ id: _id, ...rest }) => rest);
+export function stripInternalIds<T extends { id?: unknown; bill_id?: unknown }>(
+  rows: T[]
+): Array<Omit<T, 'id' | 'bill_id'>> {
+  return rows.map(({ id: _id, bill_id: _billId, ...rest }) => rest);
 }
 
 export interface BillRow {
   id?: string;
+  bill_id?: string | null;
   bill_no?: string | null;
   bill_name?: string | null;
   proposer?: string | null;
@@ -109,6 +114,8 @@ export interface BillRow {
   summary_one_sentence?: string | null;
   link_url?: string | null;
   similarity?: number;
+  /** 목록 렌더 직전에 붙이는 처리 상태 요약 (services/status.ts) */
+  status_summary?: string;
 }
 
 /** 법안 1건을 마크다운 항목으로 렌더링 (목록용) */
@@ -123,6 +130,7 @@ export function renderBillItem(bill: BillRow, index: number): string[] {
       `${primaryProposer(bill.proposer)} 대표발의${sim}`
   );
   lines.push(`- ${display(bill.committee, '소관위 미지정')} · ${display(bill.domain)} · 규제 ${display(bill.regulation_type, '미분류')}`);
+  if (bill.status_summary) lines.push(`- 상태: ${bill.status_summary}`);
 
   const summary = display(bill.summary_one_sentence, '');
   if (summary) lines.push(`- ${summary}`);

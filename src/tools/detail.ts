@@ -1,7 +1,16 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { getDb, BILL_DETAIL_COLUMNS } from '@/services/supabase';
-import { ResponseFormat, display, runTool, textResult } from '@/services/format';
+import {
+  ResponseFormat,
+  display,
+  runTool,
+  scopedJson,
+  scopedResult,
+  textResult,
+} from '@/services/format';
+import { SCOPE_NOTICE } from '@/constants';
+import { fetchStatuses, renderStatusTimeline, statusToJson } from '@/services/status';
 import { extractProposerNames } from '@/services/proposer';
 
 const InputSchema = z
@@ -34,6 +43,7 @@ export function registerDetail(server: McpServer): void {
   - 4단계 요약: 한 줄 요약 / 쉬운 설명 / 왜 중요한가 / 누구에게 영향
   - 규제 영향 대상 집단
   - 대표발의자와 소속 정당·지역구
+  - **처리 상태**: 현재 심사단계, 소관위·법사위 심사일정과 결과, 본회의 의결, 공포일·공포번호
   - 같은 주제로 묶인 법안군(토픽 클러스터) ID
 
 공동발의자는 제공하지 않는다: 국회 공개 데이터의 발의자 표기가 "홍길동의원 등 10인"
@@ -41,6 +51,12 @@ export function registerDetail(server: McpServer): void {
 담기며, 드물게(전체 1%) 공동 대표발의인 경우 2명이 담긴다.
 
 읽기 전용이며 데이터를 변경하지 않는다.
+
+${SCOPE_NOTICE}
+
+"이 법안 통과됐어?" "지금 어디까지 갔어?" 에 답할 수 있는 유일한 도구다. status 객체에 현재
+심사단계와 소관위→법사위→본회의→공포 단계별 날짜·결과가 들어 있다. 값이 null 인 단계는
+아직 도달하지 않은 것이지 정보 누락이 아니다.
 
 언제 쓰나:
   - bills_search / bills_filter 로 후보를 찾은 뒤 특정 법안을 깊이 볼 때
@@ -69,7 +85,30 @@ export function registerDetail(server: McpServer): void {
                 "region": string | null, "is_primary": true } ]
   },
   "topic_cluster_id": string | null,   // bills_topics 로 같은 주제 법안군 조회 가능
-  "link_url": string
+  "link_url": string,
+  "status": {                          // 처리 상태. 상태 행을 못 찾으면 null
+    "pass_gubn": "계류의안" | "처리의안" | null,
+    "proc_stage_cd": string | null,    // 소관위심사 / 대안반영폐기 / 공포 등
+    "current_committee": string | null,
+    "committee_referral_date": string | null,   // 소관위 회부
+    "committee_present_date": string | null,    // 소관위 상정
+    "committee_proc_date": string | null,
+    "committee_proc_result": string | null,
+    "law_referral_date": string | null,         // 법사위 체계자구심사
+    "law_present_date": string | null,
+    "law_proc_date": string | null,
+    "law_proc_result": string | null,
+    "plenary_present_date": string | null,      // 본회의 부의
+    "plenary_resolution_date": string | null,   // 본회의 의결일
+    "plenary_conf_name": string | null,
+    "plenary_result": string | null,            // 원안가결 / 수정가결 / 대안반영폐기 / 부결 등
+    "govt_transfer_date": string | null,
+    "promulgation_law_name": string | null,
+    "promulgation_date": string | null,
+    "promulgation_no": string | null,
+    "has_reconsideration": boolean     // 재의요구(거부권) 후 재표결 기록 존재 여부
+  },
+  "data_scope": object                 // 출처·해석 주의사항
 }
 
 오류 대응:
@@ -129,34 +168,35 @@ export function registerDetail(server: McpServer): void {
         });
         const primary = named[0]?.name ?? null;
 
+        // 의안번호가 재발급된 건이 있어 bill_id 를 폴백 키로 함께 넘긴다(services/status.ts).
+        const statuses = await fetchStatuses([
+          { bill_no: bill.bill_no as string | null, bill_id: bill.bill_id as string | null },
+        ]);
+        const status = statuses.get(String(bill.bill_no));
+
         const affected = bill.regulation_affected_groups;
         const affectedList = Array.isArray(affected) ? (affected as string[]) : null;
 
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              {
-                bill_no: bill.bill_no,
-                bill_name: bill.bill_name,
-                proposal_date: bill.proposal_date,
-                committee: bill.committee ?? null,
-                domain: bill.domain ?? null,
-                regulation_type: bill.regulation_type ?? null,
-                regulation_affected_groups: affectedList,
-                summary: {
-                  one_sentence: bill.summary_one_sentence ?? null,
-                  easy_explanation: bill.summary_easy_explanation ?? null,
-                  why_important: bill.summary_why_important ?? null,
-                  who_affected: bill.summary_who_affected ?? null,
-                },
-                proposers: { primary, total_count: named.length, list: named },
-                topic_cluster_id: bill.topic_cluster_id ?? null,
-                link_url: bill.link_url ?? null,
-              },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            bill_no: bill.bill_no,
+            bill_name: bill.bill_name,
+            proposal_date: bill.proposal_date,
+            committee: bill.committee ?? null,
+            domain: bill.domain ?? null,
+            regulation_type: bill.regulation_type ?? null,
+            regulation_affected_groups: affectedList,
+            summary: {
+              one_sentence: bill.summary_one_sentence ?? null,
+              easy_explanation: bill.summary_easy_explanation ?? null,
+              why_important: bill.summary_why_important ?? null,
+              who_affected: bill.summary_who_affected ?? null,
+            },
+            proposers: { primary, total_count: named.length, list: named },
+            topic_cluster_id: bill.topic_cluster_id ?? null,
+            link_url: bill.link_url ?? null,
+            status: statusToJson(status),
+          });
         }
 
         const lines: string[] = [];
@@ -198,9 +238,12 @@ export function registerDetail(server: McpServer): void {
             ''
           );
         }
+        // "이 법안 통과됐어?" 가 가장 자주 붙는 자리라 요약 바로 뒤가 아니라 여기에 둔다.
+        lines.push(...renderStatusTimeline(status));
+
         if (bill.link_url) lines.push(`원문: ${bill.link_url}`);
 
-        return textResult(lines.join('\n'));
+        return scopedResult(lines.join('\n'));
       })
   );
 }

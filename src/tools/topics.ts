@@ -7,10 +7,13 @@ import {
   display,
   renderWithLimit,
   runTool,
+  scopedJson,
+  scopedResult,
   textResult,
 } from '@/services/format';
-import { limitField, offsetField } from '@/services/bills';
-import { DOMAINS } from '@/constants';
+import { limitField, offsetField, stripInternalIds } from '@/services/bills';
+import { DOMAINS, SCOPE_NOTICE, STATUS_UNSUPPORTED_NOTE } from '@/constants';
+import { attachStatusSummaries } from '@/services/status';
 
 const InputSchema = z
   .object({
@@ -74,6 +77,12 @@ export function registerTopics(server: McpServer): void {
 같은 사안을 두고 여러 의원이 각각 발의한 경쟁 법안들을 한 덩어리로 보여준다.
 개별 법안을 훑기 전에 "지금 국회에서 어떤 주제가 뭉쳐 있는가"를 파악할 때 유용하다.
 읽기 전용이며 데이터를 변경하지 않는다.
+
+${SCOPE_NOTICE}
+
+${STATUS_UNSUPPORTED_NOTE}
+단, cluster_id 로 상세 조회하면 소속 법안마다 status_summary 가 붙으므로 "이 법안군에서 뭐가
+통과됐나"는 결과를 받아 직접 셀 수 있다.
 
 두 가지 사용법:
   1) 목록 조회 — keyword/domain/min_bills 로 법안군을 찾는다
@@ -140,15 +149,20 @@ export function registerTopics(server: McpServer): void {
 
           const { data: billRows } = await db
             .from('bills_monitor_bills')
-            .select('bill_no, bill_name, proposal_date, proposer, committee, summary_one_sentence')
+            .select('bill_id, bill_no, bill_name, proposal_date, proposer, committee, summary_one_sentence')
             .eq('topic_cluster_id', params.cluster_id)
             .order('proposal_date', { ascending: false })
             .limit(100);
 
-          const bills = billRows ?? [];
+          const bills = (billRows ?? []) as Array<Record<string, unknown> & {
+            bill_id?: string | null;
+            bill_no?: string | null;
+            status_summary?: string;
+          }>;
+          await attachStatusSummaries(bills);
 
           if (params.response_format === 'json') {
-            return textResult(JSON.stringify({ cluster, bills }, null, 2));
+            return scopedJson({ cluster, bills: stripInternalIds(bills) });
           }
 
           const lines: string[] = [`# 법안군: ${cleanClusterName(cluster.cluster_name)}`, ''];
@@ -164,12 +178,13 @@ export function registerTopics(server: McpServer): void {
           bills.forEach((b, i) => {
             lines.push(`### ${i + 1}. ${display(b.bill_name)}`);
             lines.push(`- 의안번호 ${display(b.bill_no)} · ${display(b.proposal_date)} · ${display(b.proposer)}`);
+            if (b.status_summary) lines.push(`- 상태: ${b.status_summary}`);
             const s = display(b.summary_one_sentence, '');
             if (s) lines.push(`- ${s}`);
             lines.push('');
           });
 
-          return textResult(lines.join('\n'));
+          return scopedResult(lines.join('\n'));
         }
 
         // ── 목록 조회 ──────────────────────────────────────────
@@ -202,16 +217,13 @@ export function registerTopics(server: McpServer): void {
         }
 
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              { ...buildPagination(total, clusters.length, params.offset), clusters },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            ...buildPagination(total, clusters.length, params.offset),
+            clusters,
+          });
         }
 
-        return textResult(
+        return scopedResult(
           renderWithLimit(clusters, (subset, note) => {
             const lines: string[] = ['# 법안 주제 클러스터', ''];
             lines.push(`전체 ${total}개 중 ${subset.length}개 표시 (offset ${params.offset})`, '');

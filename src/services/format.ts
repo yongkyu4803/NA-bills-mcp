@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CHARACTER_LIMIT } from '@/constants';
+import { CHARACTER_LIMIT, SCOPE_FOOTER, SCOPE_JSON } from '@/constants';
 
 /** 모든 도구가 공유하는 응답 형식 옵션 */
 export const ResponseFormat = z
@@ -18,6 +18,21 @@ export interface ToolResult {
 
 export function textResult(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
+}
+
+/**
+ * 마크다운 응답에 스코프 경계 안내를 붙여 반환한다.
+ *
+ * 법안 데이터를 실제로 담아 보내는 응답에만 쓴다. 0건·오류 응답에는 붙이지 않는다 —
+ * 그쪽은 이미 "무엇을 대신 하라"를 말하고 있어 안내가 겹치면 잡음이 된다.
+ */
+export function scopedResult(markdown: string): ToolResult {
+  return textResult(`${markdown}\n\n${SCOPE_FOOTER}`);
+}
+
+/** JSON 응답 객체에 기계 판독용 스코프 표기를 덧붙인다 */
+export function scopedJson(payload: Record<string, unknown>): ToolResult {
+  return textResult(JSON.stringify({ ...payload, data_scope: SCOPE_JSON }, null, 2));
 }
 
 export function errorResult(message: string): ToolResult {

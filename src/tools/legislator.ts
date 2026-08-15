@@ -7,10 +7,14 @@ import {
   display,
   renderWithLimit,
   runTool,
+  scopedJson,
+  scopedResult,
   textResult,
 } from '@/services/format';
-import { limitField, offsetField } from '@/services/bills';
+import { SCOPE_NOTICE } from '@/constants';
+import { limitField, offsetField, stripInternalIds } from '@/services/bills';
 import { extractProposerNames, proposerLikePattern } from '@/services/proposer';
+import { attachStatusSummaries } from '@/services/status';
 
 const PARTIES = [
   '더불어민주당',
@@ -29,8 +33,9 @@ const PAGE = 1000;
 /** 정당 조회에 기간이 없을 때 적용하는 기본 조회 창 (일) */
 const DEFAULT_PARTY_WINDOW_DAYS = 90;
 
+// bill_id 는 응답에 싣지 않고 처리 상태 조인 폴백 키로만 쓴다(services/status.ts).
 const BILL_COLS =
-  'bill_no, bill_name, proposer, proposal_date, committee, domain, regulation_type, summary_one_sentence, link_url';
+  'bill_id, bill_no, bill_name, proposer, proposal_date, committee, domain, regulation_type, summary_one_sentence, link_url';
 
 const InputSchema = z
   .object({
@@ -66,6 +71,8 @@ const InputSchema = z
 type Input = z.infer<typeof InputSchema>;
 
 interface BillRow {
+  /** 응답에는 싣지 않는다. 처리 상태 조인 폴백 키 전용 (stripInternalIds 가 제거) */
+  bill_id?: string | null;
   bill_no?: string | null;
   bill_name?: string | null;
   proposer?: string | null;
@@ -75,6 +82,7 @@ interface BillRow {
   regulation_type?: string | null;
   summary_one_sentence?: string | null;
   link_url?: string | null;
+  status_summary?: string;
 }
 
 function daysAgo(days: number): string {
@@ -91,6 +99,11 @@ export function registerLegislator(server: McpServer): void {
       description: `특정 국회의원 또는 정당이 **대표발의**한 법안을 조회한다 (제22대 국회).
 
 읽기 전용이며 데이터를 변경하지 않는다.
+
+${SCOPE_NOTICE}
+각 법안에 처리 상태 요약(status_summary)이 붙으므로 "이 의원 법안 중 통과된 건?"을 결과에서
+세어 볼 수는 있다. 다만 **반환 건수 자체는 발의 건수**이고, 가결률을 의원의 성과로 제시하지 말 것.
+법안 대부분은 위원회 대안에 흡수(대안반영폐기)되는 경로를 밟는데 이는 실패가 아니다.
 
 언제 쓰나:
   - "이해식 의원이 낸 법안" → member_name="이해식"
@@ -170,7 +183,7 @@ export function registerLegislator(server: McpServer): void {
           }
 
           const meta = await memberMeta(db, params.member_name);
-          return formatOutput(params, subject, bills, total, meta, null);
+          return await formatOutput(params, subject, bills, total, meta, null);
         }
 
         // ── 정당 단위: 기간으로 범위를 묶고 소속 의원 이름으로 앱에서 필터 ──
@@ -239,7 +252,7 @@ export function registerLegislator(server: McpServer): void {
         }
 
         const page = matched.slice(params.offset, params.offset + params.limit);
-        return formatOutput(params, partyName, page, matched.length, null, periodNote);
+        return await formatOutput(params, partyName, page, matched.length, null, periodNote);
       })
   );
 }
@@ -259,7 +272,7 @@ async function memberMeta(
   return row ? { party: row.party ?? null, district: row.district ?? null } : null;
 }
 
-function formatOutput(
+async function formatOutput(
   params: Input,
   subject: string,
   bills: BillRow[],
@@ -267,24 +280,20 @@ function formatOutput(
   meta: { party: string | null; district: string | null } | null,
   periodNote: string | null
 ) {
+  await attachStatusSummaries(bills);
+
   if (params.response_format === 'json') {
-    return textResult(
-      JSON.stringify(
-        {
-          subject,
-          basis: '대표발의',
-          ...(meta ? { party: meta.party, district: meta.district } : {}),
-          ...(periodNote ? { period: periodNote } : {}),
-          ...buildPagination(total, bills.length, params.offset),
-          bills,
-        },
-        null,
-        2
-      )
-    );
+    return scopedJson({
+      subject,
+      basis: '대표발의',
+      ...(meta ? { party: meta.party, district: meta.district } : {}),
+      ...(periodNote ? { period: periodNote } : {}),
+      ...buildPagination(total, bills.length, params.offset),
+      bills: stripInternalIds(bills),
+    });
   }
 
-  return textResult(
+  return scopedResult(
     renderWithLimit(bills, (subset, note) => {
       const lines: string[] = [`# ${subject} — 대표발의 법안`, ''];
       if (meta?.party) {
@@ -300,6 +309,7 @@ function formatOutput(
         lines.push(
           `- ${display(b.committee, '소관위 미지정')} · ${display(b.domain)} · 규제 ${display(b.regulation_type, '미분류')}`
         );
+        if (b.status_summary) lines.push(`- 상태: ${b.status_summary}`);
         const s = display(b.summary_one_sentence, '');
         if (s) lines.push(`- ${s}`);
         lines.push('');

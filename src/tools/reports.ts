@@ -7,8 +7,11 @@ import {
   display,
   renderWithLimit,
   runTool,
+  scopedJson,
+  scopedResult,
   textResult,
 } from '@/services/format';
+import { SCOPE_NOTICE, STATUS_UNSUPPORTED_NOTE } from '@/constants';
 import { limitField, offsetField } from '@/services/bills';
 
 const InputSchema = z
@@ -65,6 +68,11 @@ export function registerReports(server: McpServer): void {
 각 리포트는 그날 발의된 법안들을 훑어 헤드라인·총평·핵심 흐름(key_trends)·통계를 담고 있다.
 개별 법안 데이터가 아니라 "그날 무슨 일이 있었는가"에 대한 서술형 정리다.
 읽기 전용이며 데이터를 변경하지 않는다.
+
+${SCOPE_NOTICE}
+
+${STATUS_UNSUPPORTED_NOTE}
+리포트는 **그날 발의된** 법안을 다룬다. 본회의 처리 결과를 정리하는 리포트는 없다.
 
 세 가지 사용법:
   1) 최신 리포트 전문 — latest=true
@@ -130,24 +138,18 @@ export function registerReports(server: McpServer): void {
           }
 
           if (params.response_format === 'json') {
-            return textResult(
-              JSON.stringify(
-                {
-                  report_date: report.report_date,
-                  headline: report.headline,
-                  overview: report.overview,
-                  key_trends: report.key_trends ?? null,
-                  statistics: report.statistics ?? null,
-                  counts: {
-                    total: report.total_bills ?? 0,
-                    analyzed: report.analyzed_bills ?? 0,
-                    filtered: report.filtered_bills ?? 0,
-                  },
-                },
-                null,
-                2
-              )
-            );
+            return scopedJson({
+              report_date: report.report_date,
+              headline: report.headline,
+              overview: report.overview,
+              key_trends: report.key_trends ?? null,
+              statistics: report.statistics ?? null,
+              counts: {
+                total: report.total_bills ?? 0,
+                analyzed: report.analyzed_bills ?? 0,
+                filtered: report.filtered_bills ?? 0,
+              },
+            });
           }
 
           const lines: string[] = [];
@@ -174,7 +176,7 @@ export function registerReports(server: McpServer): void {
             });
           }
 
-          return textResult(lines.join('\n'));
+          return scopedResult(lines.join('\n'));
         }
 
         // ── 목록 조회 ──────────────────────────────────────────
@@ -203,16 +205,13 @@ export function registerReports(server: McpServer): void {
         }
 
         if (params.response_format === 'json') {
-          return textResult(
-            JSON.stringify(
-              { ...buildPagination(total, reports.length, params.offset), reports },
-              null,
-              2
-            )
-          );
+          return scopedJson({
+            ...buildPagination(total, reports.length, params.offset),
+            reports,
+          });
         }
 
-        return textResult(
+        return scopedResult(
           renderWithLimit(reports, (subset, note) => {
             const lines: string[] = ['# 일일 법안 동향 리포트 목록', ''];
             lines.push(`전체 ${total}건 중 ${subset.length}건 표시 (offset ${params.offset})`, '');

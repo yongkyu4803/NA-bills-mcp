@@ -7,6 +7,8 @@ import {
   runTool,
   scopedJson,
   scopedResult,
+  scopedStatusJson,
+  scopedStatusResult,
   textResult,
 } from '@/services/format';
 import { SCOPE_NOTICE } from '@/constants';
@@ -178,7 +180,7 @@ ${SCOPE_NOTICE}
         const affectedList = Array.isArray(affected) ? (affected as string[]) : null;
 
         if (params.response_format === 'json') {
-          return scopedJson({
+          return scopedStatusJson({
             bill_no: bill.bill_no,
             bill_name: bill.bill_name,
             proposal_date: bill.proposal_date,
@@ -243,7 +245,7 @@ ${SCOPE_NOTICE}
 
         if (bill.link_url) lines.push(`원문: ${bill.link_url}`);
 
-        return scopedResult(lines.join('\n'));
+        return scopedStatusResult(lines.join('\n'));
       })
   );
 }

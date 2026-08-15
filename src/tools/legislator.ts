@@ -9,6 +9,8 @@ import {
   runTool,
   scopedJson,
   scopedResult,
+  scopedStatusJson,
+  scopedStatusResult,
   textResult,
 } from '@/services/format';
 import { SCOPE_NOTICE } from '@/constants';
@@ -283,7 +285,7 @@ async function formatOutput(
   await attachStatusSummaries(bills);
 
   if (params.response_format === 'json') {
-    return scopedJson({
+    return scopedStatusJson({
       subject,
       basis: '대표발의',
       ...(meta ? { party: meta.party, district: meta.district } : {}),
@@ -293,7 +295,7 @@ async function formatOutput(
     });
   }
 
-  return scopedResult(
+  return scopedStatusResult(
     renderWithLimit(bills, (subset, note) => {
       const lines: string[] = [`# ${subject} — 대표발의 법안`, ''];
       if (meta?.party) {

@@ -11,6 +11,8 @@ import {
   runTool,
   scopedJson,
   scopedResult,
+  scopedStatusJson,
+  scopedStatusResult,
   textResult,
 } from '@/services/format';
 import {
@@ -172,14 +174,14 @@ ${SCOPE_NOTICE}
         await attachStatusSummaries(page);
 
         if (params.response_format === 'json') {
-          return scopedJson({
+          return scopedStatusJson({
             query: params.query,
             ...buildPagination(total, page.length, 0),
             bills: stripInternalIds(page),
           });
         }
 
-        return scopedResult(
+        return scopedStatusResult(
           renderWithLimit(page, (subset, note) =>
             renderBillList(`법안 검색: "${params.query}"`, subset, {
               total,

@@ -9,6 +9,8 @@ import {
   runTool,
   scopedJson,
   scopedResult,
+  scopedStatusJson,
+  scopedStatusResult,
   textResult,
 } from '@/services/format';
 import { limitField, offsetField, stripInternalIds } from '@/services/bills';
@@ -162,7 +164,7 @@ ${STATUS_UNSUPPORTED_NOTE}
           await attachStatusSummaries(bills);
 
           if (params.response_format === 'json') {
-            return scopedJson({ cluster, bills: stripInternalIds(bills) });
+            return scopedStatusJson({ cluster, bills: stripInternalIds(bills) });
           }
 
           const lines: string[] = [`# 법안군: ${cleanClusterName(cluster.cluster_name)}`, ''];
@@ -184,7 +186,7 @@ ${STATUS_UNSUPPORTED_NOTE}
             lines.push('');
           });
 
-          return scopedResult(lines.join('\n'));
+          return scopedStatusResult(lines.join('\n'));
         }
 
         // ── 목록 조회 ──────────────────────────────────────────

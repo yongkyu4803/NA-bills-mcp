@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CHARACTER_LIMIT, SCOPE_FOOTER, SCOPE_JSON } from '@/constants';
+import { freshnessJson, freshnessNote, getStatusFreshness } from './freshness';
 
 /** 모든 도구가 공유하는 응답 형식 옵션 */
 export const ResponseFormat = z
@@ -33,6 +34,28 @@ export function scopedResult(markdown: string): ToolResult {
 /** JSON 응답 객체에 기계 판독용 스코프 표기를 덧붙인다 */
 export function scopedJson(payload: Record<string, unknown>): ToolResult {
   return textResult(JSON.stringify({ ...payload, data_scope: SCOPE_JSON }, null, 2));
+}
+
+/**
+ * 처리 상태를 실제로 담아 보내는 응답용. scopedResult 에 신선도 한 줄을 더 붙인다.
+ * 상태를 표시하지 않는 도구(bills_statistics·bills_daily_report)에는 쓰지 않는다 —
+ * 상태 경고를 상태 없는 응답에 붙이면 무엇이 낡았다는 건지 알 수 없다.
+ */
+export async function scopedStatusResult(markdown: string): Promise<ToolResult> {
+  const note = freshnessNote(await getStatusFreshness());
+  return scopedResult(note ? `${markdown}\n\n${note}` : markdown);
+}
+
+/** 처리 상태를 담은 JSON 응답용. data_scope 에 기준일과 stale 여부를 넣는다. */
+export async function scopedStatusJson(payload: Record<string, unknown>): Promise<ToolResult> {
+  const freshness = await getStatusFreshness();
+  return textResult(
+    JSON.stringify(
+      { ...payload, data_scope: { ...SCOPE_JSON, ...freshnessJson(freshness) } },
+      null,
+      2
+    )
+  );
 }
 
 export function errorResult(message: string): ToolResult {
